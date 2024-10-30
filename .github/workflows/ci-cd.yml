@@ -21,38 +21,36 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: permission to gradle
-        run: chmod +x ./gradlew
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+      - name: make application-prod.yml
+        run: |
+          cd ./src/main/resources
+          touch ./application-prod.yml
+          echo "${{ secrets.YML_PROD }}" > ./application-prod.yml
+        shell: bash
+
       - name: Build with Gradle
-        run: ./gradlew clean build -x test
+        run: |
+          ./gradlew build -x test
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+        run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and Push Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: uzz99/salesboost:salesboost-be-1.0
-
-      - name: Discord noti on success
-        if: success()
+      - name: Docker build & push
         run: |
-          curl -H "Content-Type: application/json" \
-               -X POST \
-               -d '{"content": "🟢 `uzz99/salesboost:salesboost-be-1.0`\nDOCKER HUB PUSH 완료"}' \
-               ${{ secrets.DISCORD_WEBHOOK_URL }}
+          docker build -t ekkim329/salesboost-server .
+          docker push ekkim329/salesboost-server
 
-      - name: Discord noti on failure
-        if: failure()
-        run: |
-          curl -H "Content-Type: application/json" \
-               -X POST \
-               -d '{"content": "🔴 `uzz99/salesboost:salesboost-be-1.0`\nDOCKER HUB PUSH 실패 "}' \
-               ${{ secrets.DISCORD_WEBHOOK_URL }}
+      - name : Connect to EC2
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_PRIVATE_KEY }}
+          script: |
+            cd /home/ubuntu/
+            sudo docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+            sudo docker ps
+            sudo docker pull ekkim329/salesboost-server
+            sudo docker-compose down
+            sudo docker-compose up -d
+            sudo docker image prune -f
