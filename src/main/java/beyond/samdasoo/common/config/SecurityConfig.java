@@ -106,7 +106,7 @@ public class SecurityConfig {
         configuration.setAllowedHeaders(Collections.singletonList("*"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedOrigins(List.of("http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5175"
-        ,"https://d18cdfira8jz6e.cloudfront.net"));
+        ,"https://d18cdfira8jz6e.cloudfront.net","https://cdn.samdasoo.click"));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
