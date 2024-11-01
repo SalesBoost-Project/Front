@@ -31,6 +31,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+
 @RequiredArgsConstructor
 @Configuration
 @EnableWebSecurity
@@ -42,7 +43,6 @@ public class SecurityConfig {
     private final CookieUtil cookieUtil;
     private final RefreshTokenService refreshTokenService;
 
-
     @Bean
     public BCryptPasswordEncoder bCryptPasswordEncoder() {
         return new BCryptPasswordEncoder();
@@ -50,7 +50,6 @@ public class SecurityConfig {
 
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
-
         return configuration.getAuthenticationManager();
     }
 
@@ -58,44 +57,43 @@ public class SecurityConfig {
     public AuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider authenticationProvider = new DaoAuthenticationProvider();
         authenticationProvider.setUserDetailsService(customUserDetailService);
-        authenticationProvider.setPasswordEncoder(bCryptPasswordEncoder()); // 비번 암호화 자동 처리
+        authenticationProvider.setPasswordEncoder(bCryptPasswordEncoder());
         return authenticationProvider;
     }
 
-
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity httpSecurity, DispatcherServlet dispatcherServlet) throws Exception {
-
+    public SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {
         httpSecurity
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .csrf(AbstractHttpConfigurer::disable);
 
-        // 인증 인가 관련
+        // CORS 설정 추가
+        httpSecurity.cors(cors -> cors.configurationSource(corsConfigurationSource()));
+
+        // 인증 및 권한 설정
         httpSecurity
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests((auth) -> auth
-//                        .requestMatchers("/api/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll() // 테스트용
                         .requestMatchers(HttpMethod.GET, "/api/admin/processes", "/api/admin/subprocesses/**", "/api/admin/departments").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/test/**", "/api/users/login", "/api/users/join",
-                                "/api/users/reissue", "/api/users/email/**", "/api/admin/targetsales/status/**","/api/users/reset-password-request","/api/users/reset-password").permitAll()
+                                "/api/users/reissue", "/api/users/email/**", "/api/admin/targetsales/status/**", "/api/users/reset-password-request", "/api/users/reset-password").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 );
 
-        // 세션
+        // 세션 관리 - JWT 사용을 위한 설정
         httpSecurity
-                .sessionManagement((session) -> session
+                .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
+        // 예외 처리
         httpSecurity
-                .exceptionHandling(httpSecurityExceptionHandlingConfigurer
-                        -> httpSecurityExceptionHandlingConfigurer.authenticationEntryPoint(jwtAuthenticationEntrypoint));
+                .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntrypoint));
 
+        // 필터 설정 - AuthenticationFilter와 JWT 필터 추가
         AuthenticationFilter authenticationFilter = new AuthenticationFilter(authenticationManager(httpSecurity.getSharedObject(AuthenticationConfiguration.class)), jwtTokenProvider, cookieUtil, refreshTokenService);
-        authenticationFilter.setFilterProcessesUrl("/api/users/login"); // 로그인 경로 재설정
+        authenticationFilter.setFilterProcessesUrl("/api/users/login");
         httpSecurity.addFilterAt(authenticationFilter, UsernamePasswordAuthenticationFilter.class);
-        httpSecurity
-                .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider, customUserDetailService), UsernamePasswordAuthenticationFilter.class);
+        httpSecurity.addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider, customUserDetailService), UsernamePasswordAuthenticationFilter.class);
 
         return httpSecurity.build();
     }
@@ -105,14 +103,18 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedHeaders(Collections.singletonList("*"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedOrigins(List.of("http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5175"
-        ,"https://d18cdfira8jz6e.cloudfront.net","https://cdn.samdasoo.click","*"));
+        configuration.setAllowedOrigins(Arrays.asList(
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "http://localhost:5175",
+                "https://d18cdfira8jz6e.cloudfront.net",
+                "https://cdn.samdasoo.click",
+                "http://cdn.samdasoo.click"
+        ));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
-
         return source;
     }
-
 }
